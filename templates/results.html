@@ -13,7 +13,7 @@
       <ul>
         {% for event in events %}
         <li>
-          <h3><a href="{{ event['uri'] }}">{{ event['displayName'] }}</a></h3>
+          <h3><a href="{{ event['uri'] }}">{{ event['performance'][0]['displayName'] }}</a></h3>
           <p>{{ event['start']['time'] }} @ {{ event['venue']['displayName'] }}</p>
         </li>
         {% endfor %}
