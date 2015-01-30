@@ -1,6 +1,10 @@
       {% if done %}
-      <p id="loading-complete">Loading complete!</p>
+      {% if error %}
+      <p id="loading-complete" class="error">{{ error }}</p>
       {% else %}
+      <p id="loading-complete">Loading complete!</p>
+      {% endif %}
+      {% elif events_by_date %}
       <p id="loading">Still loading, please wait!</p>
       {% endif %}
 

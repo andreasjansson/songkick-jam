@@ -25,8 +25,9 @@ def results():
         shows, done = fetch_shows(username, location, page=page)
         error = None
     except JamSongkickException as e:
-        shows = []
+        shows = {}
         error = e.message
+        done = True
 
     template = 'index.html' if page is None else 'results.html'
     return render_template(template, username=username, location=location,
