@@ -1,10 +1,10 @@
+import os
 import cPickle
 import functools
 from redis import StrictRedis
 import collections
 import datetime
 import requests
-import argparse
 from flask import Flask, request, render_template
 
 app = Flask(__name__)
@@ -139,15 +139,10 @@ def paginate_jams(endpoint):
     return data
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-s', '--song-kick-api-key')
-    parser.add_argument('-j', '--jam-api-key')
-    parser.add_argument('-d', '--debug', action='store_true')
-    args = parser.parse_args()
-    app.config['song_kick_api_key'] = args.song_kick_api_key
-    app.config['jam_api_key'] = args.jam_api_key
+    app.config['song_kick_api_key'] = os.environ['SONG_KICK_API_KEY']
+    app.config['jam_api_key'] = os.environ['JAM_API_KEY']
 
-    app.run(debug=args.debug)
+    app.run(debug=False)
 
 class JamSongkickException(Exception): pass
 
