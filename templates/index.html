@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Songkick/Jam</title>
+    <script src="https://code.jquery.com/jquery-1.11.2.min.js"></script>
+    <script src="static/script.js"></script>
+  </head>
+  <body>
+    <h1>Songkick/Jam</h1>
+    <section>
+      <form action="/results" method="GET" id="form">
+        <label for="username">This Is My Jam username</label>
+        <input type="text" id="username" name="username" value="{{ username }}" />
+        <label for="location">Location</label>
+        <input type="text" id="location" name="location" value="{{ location }}" />
+        <input type="submit" />
+      </form>
+    </section>
+    <section id="results">
+      {% include "results.html" %}
+    </section>
+  </body>
+</html>

@@ -1,0 +1,17 @@
+      {% if done %}
+      <p id="loading-complete">Loading complete!</p>
+      {% else %}
+      <p id="loading">Still loading, please wait!</p>
+      {% endif %}
+
+      {% for date, events in events_by_date.iteritems() %}
+      <h2>{{ date }}</h2>
+      <ul>
+        {% for event in events %}
+        <li>
+          <h3><a href="{{ event['uri'] }}">{{ event['displayName'] }}</a></h3>
+          <p>{{ event['start']['time'] }} @ {{ event['venue']['displayName'] }}</p>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endfor %}
