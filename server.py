@@ -7,9 +7,15 @@ import datetime
 import requests
 import urllib
 from flask import Flask, request, render_template
+import logging
+import sys
 
 app = Flask(__name__)
 redis = StrictRedis(host='localhost', port=6379)
+
+app.logger.addHandler(logging.StreamHandler(sys.stdout))
+app.logger.addHandler(logging.StreamHandler(sys.stderr))
+app.logger.setLevel(logging.DEBUG)
 
 @app.route('/', methods=['GET'])
 def index():
@@ -120,7 +126,9 @@ def fetch_events(jams, location_id, page=None, per_page=10):
     for artist in artists:
         artist_events = fetch_artist_events(artist, location_id, max_date)
         future_events = [e for e in artist_events if e['start']['date'] >= today]
-        events += future_events
+        for event in future_events:
+            if event['id'] not in [e['id'] for e in events]:
+                events.append(event)
 
     return events, done
 
