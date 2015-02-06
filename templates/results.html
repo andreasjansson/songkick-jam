@@ -14,7 +14,18 @@
         {% for event in events %}
         <li>
           <h3><a href="{{ event['uri'] }}">{{ event['performance'][0]['displayName'] }}</a></h3>
-          <p>{{ event['start']['time'] }} @ {{ event['venue']['displayName'] }}</p>
+          <p>
+	    {% if event['start']['time'] %}
+	    {{ event['start']['time'] }}
+	    {% endif %}
+	    @ {{ event['venue']['displayName'] }}
+	    {% if event['jam'] %}
+	    |
+	    <a target="_blank" href="{{ event['jam']['url'] }}">{{ event['jam']['artist'] }} - {{ event['jam']['title'] }}</a>
+	    (from {{ event['jam']['from'] }})
+	    {% endif %}
+	  </p>
+          </p>
         </li>
         {% endfor %}
       </ul>

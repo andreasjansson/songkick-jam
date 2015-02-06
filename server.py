@@ -5,6 +5,7 @@ from redis import StrictRedis
 import collections
 import datetime
 import requests
+import urllib
 from flask import Flask, request, render_template
 
 app = Flask(__name__)
@@ -41,6 +42,7 @@ def cached(key_format, ttl=None):
             resp = redis.get(key)
             if resp:
                 return cPickle.loads(resp)
+            print 'uncached %s' % key
             ret = f(*args)
             redis.set(key, cPickle.dumps(ret))
             if ttl:
@@ -55,11 +57,39 @@ def fetch_shows(username, location, page=None):
     likes = fetch_likes(username)
     location_id = fetch_location(location)
     events, done = fetch_events(jams + likes, location_id, page=page)
+    events = events_with_jams(events, jams + likes)
     return events_by_date(events), done
+
+def fuzzy(s):
+    return s.lower().replace(' ', '')
+
+def events_with_jams(events, jams):
+    jams_by_artist = {}
+    for jam in jams:
+        artist = fuzzy(jam['artist'])
+
+        if artist not in jams_by_artist:
+            via_url = jam.get('viaUrl')
+            if via_url and ('youtube' in via_url
+                            or 'vimeo' in via_url
+                            or 'soundcloud' in via_url
+                            or 'bandcamp' in via_url):
+                jam['url'] = via_url
+            else:
+                search_query = urllib.quote_plus(('%s - %s' % (jam['artist'], jam['title'])).encode('utf8'))
+                jam['url'] = 'https://www.youtube.com/results?search_query=%s' % search_query
+
+            jams_by_artist[artist] = jam
+
+    for e in events:
+        artist = e['performance'][0]['artist']['displayName']
+        e['jam'] = jams_by_artist.get(fuzzy(artist))
+
+    return events
 
 def events_by_date(unordered):
     events = collections.OrderedDict()
-    for event in sorted(unordered, key=lambda e: e['start']['datetime']):
+    for event in sorted(unordered, key=lambda e: '%s%s' % (e['start']['date'], e['start']['datetime'])):
         date = event['start']['date']
         if date not in events:
             events[date] = []
@@ -68,7 +98,7 @@ def events_by_date(unordered):
 
 @cached('location:%s')
 def fetch_location(location):
-    locations = songkick_search('locations.json', query=location)['location']
+    locations = songkick_search('search/locations.json', query=location)['location']
     if not locations:
         raise JamSongkickException('"%s" is not a known location!' % location)
 
@@ -83,35 +113,32 @@ def fetch_events(jams, location_id, page=None, per_page=10):
         done = page * per_page >= len(artists)
         artists = artists[:page * per_page]
 
-
     now = datetime.datetime.now()
-    three_months = datetime.timedelta(days=90)
-    max_date = (now + three_months).strftime('%Y-%m-%d')
+    three_months = datetime.timedelta(days=120)
+    max_date = (now + three_months).strftime('%Y-%m-01')
+    today = now.strftime('%Y-%m-%d')
     for artist in artists:
-        events += fetch_artist_events(artist, location_id, max_date)
+        artist_events = fetch_artist_events(artist, location_id, max_date)
+        future_events = [e for e in artist_events if e['start']['date'] >= today]
+        events += future_events
 
     return events, done
 
 @cached('artist_events:%s:%s:%s', 60 * 60 * 24 * 7)
 def fetch_artist_events(artist, location_id, max_date):
+    min_date = datetime.datetime.now().strftime('%Y-%m-01')
     return songkick_search('events.json',
                            artist_name=artist,
                            location='sk:%s' % location_id,
-                           max_date=max_date)['event']
+                           min_date=min_date,
+                           max_date=max_date).get('event', [])
 
 def songkick_search(endpoint, **kwargs):
-
-    if endpoint == 'locations.json':
-        resp = dummy_location_search_response
-    if endpoint == 'events.json':
-        resp = dummy_event_search_response
-
-
-#    url = 'http://api.songkick.com/api/3.0/%s' % endpoint
-#    params = {'apikey': app.config['song_kick_api_key'], 'per_page': 50}
-#    params.update(kwargs)
-#    r = requests.get(url, params=params)
-#    resp = r.json()
+    url = 'http://api.songkick.com/api/3.0/%s' % endpoint
+    params = {'apikey': app.config['song_kick_api_key'], 'per_page': 50}
+    params.update(kwargs)
+    r = requests.get(url, params=params)
+    resp = r.json()
     return resp['resultsPage']['results']
 
 @cached('jams:%s', 60 * 60 * 24 * 7)
@@ -143,115 +170,9 @@ def main():
     app.config['song_kick_api_key'] = os.environ['SONG_KICK_API_KEY']
     app.config['jam_api_key'] = os.environ['JAM_API_KEY']
 
-    app.run(debug=False)
+    app.run(debug=True, host='0.0.0.0')
 
 class JamSongkickException(Exception): pass
-
-dummy_event_search_response = \
-{
-      "resultsPage": {
-          "page": 1,
-          "totalEntries": 2,
-          "perPage": 50,
-          "results": {
-              "event": [{
-                  "displayName": "Vampire Weekend at O2 Academy Brixton (February 16, 2010)",
-                  "type": "Concert",
-                  "uri": "http://www.songkick.com/concerts/3037536-vampire-weekend-at-o2-academy-brixton?utm_medium=partner&utm_source=PARTNER_ID",
-                  "venue": {
-                      "lng": -0.1187418,
-                      "displayName": "O2 Academy Brixton",
-                      "lat": 51.4681089,
-                      "id": 17522,
-                  },
-                  "location": {
-                      "lng": -0.1187418,
-                      "city": "London, UK",
-                      "lat": 51.4681089
-                  },
-                  "start": {
-                      "time": "19:30:00",
-                      "date": "2010-02-16",
-                      "datetime": "2010-02-16T19:30:00+0000"
-                  },
-                  "performance": [{
-                      "artist": {
-                          "uri": "http://www.songkick.com/artists/288696-vampire-weekend",
-                          "displayName": "Vampire Weekend",
-                          "id": 288696,
-                          "identifier": [{"mbid": "af37c51c-0790-4a29-b995-456f98a6b8c9"}]
-                      },
-                     "displayName": "Vampire Weekend",
-                     "billingIndex": 1,
-                     "id": 5380281,
-                     "billing": "headline"
-                  }],
-                  "id": 3037536
-              },
-              {
-                  "displayName": "Vampire Weekend at O2 Academy Brixton (February 17, 2010)",
-                  "type": "Concert",
-                  "uri": "http://www.songkick.com/concerts/3078766-vampire-weekend-at-o2-academy-brixton?utm_medium=partner&utm_source=PARTNER_ID",
-                  "venue": {
-                      "lng": -0.1187418,
-                      "displayName": "O2 Academy Brixton",
-                      "lat": 51.4681089,
-                      "id": 17522,
-                  },
-                  "location": {
-                      "lng": -0.1187418,
-                      "city": "London, UK",
-                      "lat": 51.4681089
-                  },
-                  "start": {
-                      "time": "19:30:00",
-                      "date": "2010-02-17",
-                      "datetime": "2010-02-17T19:30:00+0000"
-                  },
-                  "performance": [{
-                      "artist": {
-                          "uri": "http://www.songkick.com/artists/288696-vampire-weekend",
-                          "displayName": "Vampire Weekend",
-                          "id": 288696,
-                          "identifier": [{"mbid": "af37c51c-0790-4a29-b995-456f98a6b8c9"}]
-                      },
-                      "displayName": "Vampire Weekend",
-                      "billingIndex": 1,
-                      "id": 5468321,
-                      "billing": "headline"
-                  }],
-                  "id": 3078766
-              }]
-          }
-      }
-  }
-
-
-dummy_location_search_response = \
-{"resultsPage":
-    {"results":
-      {"location":[{
-        "city":{"displayName":"London",
-                "country":{"displayName":"UK"},
-                "lng":-0.128,"lat":51.5078},
-        "metroArea":{"uri":"http://www.songkick.com/metro_areas/24426-uk-london",
-                     "displayName":"London",
-                     "country":{"displayName":"UK"},
-                     "id":24426,
-                     "lng":-0.128,"lat":51.5078}},
-        {"city":{"displayName":"London",
-                 "country":{"displayName":"US"},
-                 "lng":None,"lat":None,
-                 "state":{"displayName":"KY"}},
-        "metroArea":{"uri":"http://www.songkick.com/metro_areas/24580",
-                     "displayName":"Lexington",
-                     "country":{"displayName":"US"},
-                     "id":24580,
-                     "lng":-84.4947,"lat":38.0297,
-                     "state":{"displayName":"KY"}}}
-    ]},
-    "totalEntries":2,"perPage":10,"page":1,"status":"ok"}}
-
 
 
 if __name__ == '__main__':
