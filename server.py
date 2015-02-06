@@ -48,7 +48,7 @@ def cached(key_format, ttl=None):
             resp = redis.get(key)
             if resp:
                 return cPickle.loads(resp)
-            print 'uncached %s' % key
+            print 'uncached %s' % key.encode('utf8')
             ret = f(*args)
             redis.set(key, cPickle.dumps(ret))
             if ttl:
@@ -66,13 +66,10 @@ def fetch_shows(username, location, page=None):
     events = events_with_jams(events, jams + likes)
     return events_by_date(events), done
 
-def fuzzy(s):
-    return s.lower().replace(' ', '')
-
 def events_with_jams(events, jams):
     jams_by_artist = {}
     for jam in jams:
-        artist = fuzzy(jam['artist'])
+        artist = jam['artist']
 
         if artist not in jams_by_artist:
             via_url = jam.get('viaUrl')
@@ -88,8 +85,8 @@ def events_with_jams(events, jams):
             jams_by_artist[artist] = jam
 
     for e in events:
-        artist = e['performance'][0]['artist']['displayName']
-        e['jam'] = jams_by_artist.get(fuzzy(artist))
+        artist = e['original_artist']
+        e['jam'] = jams_by_artist.get(artist)
 
     return events
 
@@ -128,6 +125,7 @@ def fetch_events(jams, location_id, page=None, per_page=10):
         future_events = [e for e in artist_events if e['start']['date'] >= today]
         for event in future_events:
             if event['id'] not in [e['id'] for e in events]:
+                event['original_artist'] = artist
                 events.append(event)
 
     return events, done
@@ -178,7 +176,7 @@ def main():
     app.config['song_kick_api_key'] = os.environ['SONG_KICK_API_KEY']
     app.config['jam_api_key'] = os.environ['JAM_API_KEY']
 
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=False, host='0.0.0.0')
 
 class JamSongkickException(Exception): pass
 
